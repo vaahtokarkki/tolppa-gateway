@@ -1,0 +1,9 @@
+version: "3.3"
+services:
+  gateway:
+    image: vaahtokarkki/tolppa-gateway
+    build: .
+    ports:
+      - "1337:1337"
+    env_file:
+      - .env
