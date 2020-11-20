@@ -1,14 +1,32 @@
 const express = require('express');
-const api = require("axios")
-var cors = require('cors')
+const axios = require("axios")
+const cors = require('cors')
 const bodyParser = require('body-parser')
 const gateway = express()
-var morgan = require('morgan')
-
+const morgan = require('morgan')
+const parse = require('date-fns/parse')
+const isAfter = require('date-fns/isAfter')
+const isBefore = require('date-fns/isBefore')
 require('dotenv').config()
 
+const api = axios.create()
+
+api.interceptors.request.use(req => {
+    console.info("AXIOS", req.method, req.url);
+    return req;
+})
+
+api.interceptors.response.use(res => {
+    console.info("AXIOS", res.status, res.config.url);
+    return res;
+})
+
+
+
+morgan.token('body', (req, res) => JSON.stringify(req.body));
+
 gateway.use(bodyParser.json())
-gateway.use(morgan(':method :url :status :res[content-length] - :response-time ms'))
+gateway.use(morgan(':method :url :status :body :user-agent :remote-addr - :response-time ms'))
 gateway.use(cors({credentials: true, origin: true}))
 
 const URL = process.env.URL
@@ -32,15 +50,50 @@ async function get(token) {
     try {
         const headers = getHeaders(token)
         const plate = await api.get(`${URL}/reservationapi/reservations/${RESERVATION_ID}/plate`, {headers})
-        const reservations = await api.get(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers`, {headers})
+        let reservations = await api.get(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers`, {headers})
         const status = await api.get(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers/state`, {headers})
         const temper = await api.get(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers/configuration`, {headers})
+
 
         const { licensePlate } = plate.data
         const { state } = status.data
         const { temperature } = temper.data
-        return { licensePlate, state, reservations: reservations.data, temperature }
+
+        const [past, active] = getTimers(reservations)
+        cleanTimers(past, token)
+        return { licensePlate, state, reservations: active, temperature }
     } catch(e) { console.log("WHAAT", e)}
+}
+
+/**
+ * Get timers as [pastTimers, activeTimers]
+ * @param {*} token
+ */
+function getTimers(timers) {
+    try {
+        const past = timers.data.filter(({dateEnd, timeEnd}) => {
+            const timerDate = parse(`${dateEnd} ${timeEnd}`, 'dd.MM.yyyy HH:mm', new Date())
+            return isAfter(new Date(), timerDate)
+        })
+        const active = timers.data.filter(({dateEnd, timeEnd}) => {
+            const timerDate = parse(`${dateEnd} ${timeEnd}`, 'dd.MM.yyyy HH:mm', new Date())
+            return isBefore(new Date(), timerDate)
+        })
+        return [past, active]
+    } catch(e) {
+        console.log("WHOOPS", e)
+        return [[], []]
+    }
+}
+
+function cleanTimers(timersToDelete, token) {
+    if (!timersToDelete || !token) return
+    const headers = getHeaders(token)
+    timersToDelete.forEach(({timerId}) => {
+        try {
+            api.delete(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers/${timerId}`, {headers})
+        } catch(e) { console.log("WHOOPS when deleting a timer", e)}
+    })
 }
 
 
