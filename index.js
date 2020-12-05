@@ -43,7 +43,11 @@ async function post(data, headers) {
     try {
         const resp = await api.post(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers`, data, {headers})
         console.log(resp.data)
-    } catch(e) { console.log("WHOOPS", e)}
+        return resp
+    } catch(e) {
+        console.error("WHOOPS", e.request.res.statusCode, e.request.res.data)
+        return [e.request.res.statusCode, e.request.res.data]
+    }
 }
 
 async function get(token) {
@@ -56,13 +60,16 @@ async function get(token) {
 
 
         const { licensePlate } = plate.data
-        const { state } = status.data
+        const { state, consumption } = status.data
         const { temperature } = temper.data
 
         const [past, active] = getTimers(reservations)
         cleanTimers(past, token)
-        return { licensePlate, state, reservations: active, temperature }
-    } catch(e) { console.log("WHAAT", e)}
+        return { licensePlate, state, reservations: active, temperature, consumption }
+    } catch(e) {
+        console.error("WHAAT", e.request.res.statusCode, e.request.res.data)
+        return [e.request.res.statusCode, e.request.res.data]
+    }
 }
 
 /**
@@ -81,7 +88,7 @@ function getTimers(timers) {
         })
         return [past, active]
     } catch(e) {
-        console.log("WHOOPS", e)
+        console.error("WHOOPS", e)
         return [[], []]
     }
 }
@@ -92,27 +99,29 @@ function cleanTimers(timersToDelete, token) {
     timersToDelete.forEach(({timerId}) => {
         try {
             api.delete(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers/${timerId}`, {headers})
-        } catch(e) { console.log("WHOOPS when deleting a timer", e)}
+        } catch(e) {console.error("WHOOPS when deleting a timer", e)}
     })
 }
 
 
 gateway
-    .post('/timer', (req, res, next) => {
+    .post('/timer', async (req, res, next) => {
         const { endDate, endTime, duration, eco, token } = req.body
         const data = {
             dateEnd: endDate, timeEnd: endTime, duration, eco, parkingPointId: PARKING_POINT_ID, charging: 0, weekdayMask: 124
         }
         const headers = getHeaders(token)
         console.log("GOT", headers, data)
-        post(data, headers)
-        res.sendStatus(200)
+        const resp = await post(data, headers)
+        if (Array.isArray(resp)) res.status(resp[0]).send(resp[1])
+        else res.status(200).send(resp.data)
     })
     .post('/details', async (req, res, next) => {
         const { token } = req.body
         if (!token) return res.sendStatus(400)
         const data = await get(token)
-        res.status(200).send(data)
+        if (Array.isArray(data)) res.status(data[0]).send(data[1])
+        else res.status(200).send(data)
     })
     .get('/', (req, res, next) => res.status(200).send("This is not your tolppa"))
     .listen(process.env.PORT || 1337, function() {console.log(`Server listening on ${process.env.PORT || 1337}`)});
