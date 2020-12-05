@@ -26,7 +26,7 @@ jobs:
         project_id: ${{ secrets.RUN_PROJECT }}
     
     - name: Use gcloud CLI
-      run: gcloud auth login
+      run: gcloud auth configure-docker
 
     # Build and push image to Google Container Registry
     - name: Build
