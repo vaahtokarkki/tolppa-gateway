@@ -37,9 +37,9 @@ jobs:
       run: |-
         docker push "gcr.io/$PROJECT_ID/$SERVICE_NAME:latest"
     
-    - name: Push
-      run: gcloud run deploy $SERVICE_NAME \
-        --image "gcr.io/$PROJECT_ID/tolppa-gateway:latest" \
-        --project $PROJECT_ID \
-        --region europe-north1 \
+    - name: Deploy
+      run: gcloud run deploy $SERVICE_NAME
+        --image "gcr.io/$PROJECT_ID/tolppa-gateway:latest"
+        --project $PROJECT_ID
+        --region europe-north1
         --platform managed
