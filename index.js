@@ -72,6 +72,16 @@ async function get(token) {
     }
 }
 
+async function getAllTimers(token) {
+    try {
+        const headers = getHeaders(token)
+        return await api.get(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers`, {headers})
+    } catch(e) {
+        console.error("WHAAT", e.request.res.statusCode, e.request.res.data)
+        return [e.request.res.statusCode, e.request.res.data]
+    }
+}
+
 /**
  * Get timers as [pastTimers, activeTimers]
  * @param {*} token
@@ -93,14 +103,19 @@ function getTimers(timers) {
     }
 }
 
-function cleanTimers(timersToDelete, token) {
-    if (!timersToDelete || !token) return
+async function cleanTimers(timersToDelete, token) {
+    if (!token) return false
     const headers = getHeaders(token)
-    timersToDelete.forEach(({timerId}) => {
+    let success = true
+    timersToDelete.forEach(async ({timerId}) => {
         try {
-            api.delete(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers/${timerId}`, {headers})
-        } catch(e) {console.error("WHOOPS when deleting a timer", e)}
+            await api.delete(`${URL}/timerapi/reservations/${RESERVATION_ID}/timers/${timerId}`, {headers})
+        } catch(e) {
+            console.error("WHOOPS when deleting a timer", e)
+            success = false
+        }
     })
+    return success
 }
 
 
@@ -122,6 +137,18 @@ gateway
         const data = await get(token)
         if (Array.isArray(data)) res.status(data[0]).send(data[1])
         else res.status(200).send(data)
+    })
+    .delete('/timer', async (req, res, next) => {
+        const { token } = req.body
+        if (!token) return res.sendStatus(400)
+        const allTimers = await getAllTimers(token)
+        if (Array.isArray(allTimers)) {
+            res.status(allTimers[0]).send(allTimers[1])
+            return
+        }
+        const success = await cleanTimers(allTimers.data, token)
+        if (!success) res.sendStatus(400)
+        else res.sendStatus(200)
     })
     .get('/', (req, res, next) => res.status(200).send("This is not your tolppa"))
     .listen(process.env.PORT || 1337, function() {console.log(`Server listening on ${process.env.PORT || 1337}`)});
