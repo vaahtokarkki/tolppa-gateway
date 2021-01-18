@@ -102,7 +102,7 @@ async function get(token, reservationId) {
     const { temperature } = temper.data
 
     const [past, active] = getTimers(reservations)
-    cleanTimers(past, token)
+    cleanTimers(past, token, reservationId)
     return {
       licensePlate,
       state,
@@ -191,7 +191,6 @@ router
     const apiConf = await getConfig(token)
     if (Array.isArray(apiConf))
       return res.status(apiConf[0]).send(apiConf[1])
-    console.log('HAAA', apiConf)
     req.apiConf = apiConf
     next()
   })
