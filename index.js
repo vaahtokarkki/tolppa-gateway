@@ -7,6 +7,8 @@ const morgan = require('morgan')
 const parse = require('date-fns/parse')
 const isAfter = require('date-fns/isAfter')
 const isBefore = require('date-fns/isBefore')
+const querystring = require('querystring')
+
 require('dotenv').config()
 
 const router = express.Router()
@@ -32,13 +34,16 @@ gateway.use(
 )
 gateway.use(cors({ credentials: true, origin: true }))
 
-const URL = process.env.URL
+const BASE = 'https://eparking.fi/'
+const URL = `${BASE}/apiv2`
+
+const userAgent =
+  'Mozilla/5.0 (Linux; Android 6.0; HTC One X10 Build/MRA58K; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/61.0.3163.98 Mobile Safari/537.36'
 
 const getHeaders = (token) => ({
   Cookie: token,
   Accept: 'application/json, text/plain, */*',
-  'User-Agent':
-    'Mozilla/5.0 (Linux; Android 6.0; HTC One X10 Build/MRA58K; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/61.0.3163.98 Mobile Safari/537.36',
+  'User-Agent': userAgent,
 })
 
 async function getConfig(token) {
@@ -185,6 +190,26 @@ async function cleanTimers(timersToDelete, token, reservationId) {
 }
 
 router
+  .post('/login', async (req, res) => {
+    try {
+      const { email: login, password } = req.body
+      // Login does return coder with >=302 --> error
+      await api.post(
+        'https://eparking.fi/fi/login',
+        querystring.stringify({ login, password }),
+        { 'user-agent': userAgent, maxRedirects: 0 },
+      )
+      if (e.response.status > 302)
+        res.status(400).send('Invalid login')
+    } catch (e) {
+      if (!e.response) res.status(400).send()
+      if (e.response.status > 302)
+        res.status(400).send('Invalid login')
+      return res.send({
+        cookie: e.response.headers['set-cookie'].join(';'),
+      })
+    }
+  })
   .use(async (req, res, next) => {
     const { token } = req.body
     if (!token) return res.sendStatus(400)
