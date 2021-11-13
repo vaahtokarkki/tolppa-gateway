@@ -34,7 +34,7 @@ gateway.use(
 )
 gateway.use(cors({ credentials: true, origin: true }))
 
-const BASE = 'https://eparking.fi/'
+const BASE = 'https://eparking.fi'
 const URL = `${BASE}/apiv2`
 
 const userAgent =
